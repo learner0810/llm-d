@@ -19,7 +19,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
       - name: coordinator
-        image: ghcr.io/llm-d/llm-d-router-coordinator:main
+        image: ghcr.m.daocloud.io/llm-d/llm-d-router-coordinator:main
         imagePullPolicy: IfNotPresent
         args:
         - --config
@@ -57,7 +57,7 @@ spec:
       # Runs the pipeline's "render" step (multimodal input normalization) as a
       # local CPU vLLM instance the coordinator container talks to over localhost.
       - name: vllm-render
-        image: vllm/vllm-openai-cpu:v0.26.0
+        image: docker.m.daocloud.io/vllm/vllm-openai-cpu:v0.27.1
         imagePullPolicy: IfNotPresent
         # "vllm launch render" runs only the preprocessing/postprocessing HTTP layer
         # (no GPU/engine warmup, no encoder-cache profiling) -- "vllm serve" boots
@@ -65,7 +65,10 @@ spec:
         # a CPU-backend warmup pass profiling a synthetic max-resolution image,
         # blowing well past the startup probe below.
         command: ["vllm", "launch", "render"]
-        args: ["$(MODEL_NAME)", "--port=8000"]
+        args:
+          - "/model-cache/"
+          - "--served-model-name=$(MODEL_NAME)"
+          - "--port=8000"
         env:
         - name: MODEL_NAME
           value: "Qwen/Qwen3-VL-32B-Instruct"
@@ -112,6 +115,9 @@ spec:
           mountPath: /.cache
         - name: vllm-config
           mountPath: /.config
+        - mountPath: /model-cache
+          name: model-storage
+          readOnly: true
       volumes:
       - name: config
         configMap:
@@ -120,6 +126,10 @@ spec:
         emptyDir: {}
       - name: vllm-config
         emptyDir: {}
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: inferx-modelcache-qwen3-vl-2b-instruct
+          readOnly: true
 ---
 apiVersion: v1
 kind: Service

@@ -3,16 +3,18 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 4
+  replicas: 1
   template:
     spec:
       containers:
         - name: modelserver
+          image: docker.m.daocloud.io/vllm/vllm-openai:v0.27.1
           command: ["vllm", "serve"]
           args:
-            - "$(MODEL_NAME)"
+            - "/model-cache/"
+            - "--served-model-name=$(MODEL_NAME)"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--tensor-parallel-size=2"
+            - "--tensor-parallel-size=1"
             - "--block-size=128"
             - "--max-model-len=32000"
             - "--kv-transfer-config"
@@ -42,11 +44,11 @@ spec:
             limits:
               cpu: "4"
               memory: 32Gi
-              nvidia.com/gpu: "2"
+              nvidia.com/gpu: "1"
             requests:
               cpu: "4"
               memory: 32Gi
-              nvidia.com/gpu: "2"
+              nvidia.com/gpu: "1"
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
@@ -54,6 +56,9 @@ spec:
               name: torch-compile-cache
             - mountPath: /.config
               name: config-cache
+            - mountPath: /model-cache
+              name: model-storage
+              readOnly: true
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -76,3 +81,7 @@ spec:
           emptyDir: {}
         - name: config-cache
           emptyDir: {}
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: inferx-modelcache-qwen3-vl-2b-instruct
+            readOnly: true
