@@ -5,7 +5,7 @@ metadata:
   labels:
     llm-d.ai/role: encode
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       llm-d.ai/role: encode
@@ -17,17 +17,18 @@ spec:
       serviceAccountName: sa
       containers:
         - name: modelserver
-          image: REPLACE_MODEL_SERVER_IMAGE
+          image: docker.m.daocloud.io/vllm/vllm-openai:v0.27.1
           command: ["vllm", "serve"]
           args:
-            - "$(MODEL_NAME)"
+            - "/model-cache/"
+            - "--served-model-name=$(MODEL_NAME)"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--tensor-parallel-size=2"
+            - "--tensor-parallel-size=1"
             - "--mm-encoder-only"
             - "--enforce-eager"
             - "--no-enable-prefix-caching"
             - "--ec-transfer-config"
-            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_producer"}'
+            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_producer","ec_connector_extra_config":{"ec_cpu_bytes":1073741824}}'
           env:
             - name: MODEL_NAME
               value: "Qwen/Qwen3-VL-32B-Instruct"
@@ -57,11 +58,11 @@ spec:
             limits:
               cpu: "4"
               memory: 32Gi
-              nvidia.com/gpu: "2"
+              nvidia.com/gpu: "1"
             requests:
               cpu: "4"
               memory: 32Gi
-              nvidia.com/gpu: "2"
+              nvidia.com/gpu: "1"
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
@@ -69,6 +70,9 @@ spec:
               name: torch-compile-cache
             - mountPath: /.config
               name: config-cache
+            - mountPath: /model-cache
+              name: model-storage
+              readOnly: true
           startupProbe:
             httpGet:
               path: /v1/models
@@ -100,3 +104,7 @@ spec:
           emptyDir: {}
         - name: config-cache
           emptyDir: {}
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: inferx-modelcache-qwen3-vl-2b-instruct
+            readOnly: true
